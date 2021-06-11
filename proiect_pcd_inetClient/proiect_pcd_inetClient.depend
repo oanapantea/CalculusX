@@ -1,0 +1,12 @@
+# depslib dependency file v1.0
+1623438503 source:/home/oanap/Documents/pcdProject/proiect_pcd_inetClient/main.c
+	<stdio.h>
+	<stdlib.h>
+	<sys/types.h>
+	<sys/socket.h>
+	<netdb.h>
+	<netinet/in.h>
+	<arpa/inet.h>
+	<string.h>
+	<unistd.h>
+

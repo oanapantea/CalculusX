@@ -1,0 +1,21 @@
+# depslib dependency file v1.0
+1623446350 source:/home/oanap/Documents/pcdProject/proiect_pcd_Server/main.c
+	<sys/un.h>
+	<sys/socket.h>
+	<stddef.h>
+	<errno.h>
+	<pthread.h>
+	<sys/un.h>
+	<stdlib.h>
+	<string.h>
+	<unistd.h>
+	<netinet/in.h>
+	<arpa/inet.h>
+	<sys/types.h>
+	<sys/socket.h>
+	<sys/select.h>
+	<pthread.h>
+	<netinet/in.h>
+	<arpa/inet.h>
+	<stdio.h>
+
