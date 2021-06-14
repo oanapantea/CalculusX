@@ -1,0 +1,6 @@
+# depslib dependency file v1.0
+1623709470 source:/home/oanap/Documents/pcdProject/ecuatii/main.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+
