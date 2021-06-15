@@ -22,9 +22,14 @@
 #include <sys/stat.h>
 
 #define INET_PORT 4043
+#define UNIX_PORT 4044
+
 #define SOCKET_ERROR 1
 #define BIND_ERROR 2
 #define LISTEN_ERROR 3
+
+//Fisierul prin care serverul si clientul de administrare vor comunica:
+#define UNIX_FILE "/tmp/unixFile"
 
 #define BUF_SIZE 8192
 #define MAX_CLIENTS 30
@@ -43,13 +48,177 @@ typedef struct
 
 } inetClient;
 
-inetClient clientList[20]; //lista clientilor conectati
+inetClient clientList[30]; //lista clientilor conectati
 int mClient; // the last client
 
 FILE * blockedCFile; //file cu lista clientilor blocati
 
 char blockedIpC[MAX_CLIENTS][16];  //lista de clienti blocati
 int totalBlocked = 0;
+
+// functie procesare comanda client administrare UNIX
+
+int processClientRequest(int numChars, char * buffer, char * msg)
+{
+    int cmdType = buffer[0];
+    int numConnected = 0;
+    printf("\n UNIX = comanda primita = %s, type: %c.\n", buffer, cmdType);
+    bzero(msg, strlen(msg));  //msg este umplut cu strlen(msg) de zero
+    char temp[8];
+    int i, theFd, found;
+
+    switch(cmdType)
+    {
+    case '1': //lista fd-uri clientilor
+        strcpy(msg,"1");//seteaza tipul mesajului
+        for (i = 0; i < mClient; i++)
+        {
+            if(clientList[i].fd > 0)
+            {
+                strcat(msg, ":");
+                snprintf(temp, 3, "%d", clientList[i].fd);
+                strcat(msg, temp);
+                numConnected++;
+            }
+        }
+        if(numConnected == 0)
+            strcat(msg, " No INET client is connected.");
+        break;
+    case '2': //afisare informatii despre client
+        strcpy(msg,"2");
+        //gaseste clientul cu fd-ul cerut, afiseaza info
+        theFd = atoi(buffer + 2);
+        for(i=0; i<mClient; i++)
+        {
+            if(clientList[i].fd == theFd)
+            {
+                strcat(msg, clientList[i].IP);
+                strcat(msg, ":");
+                snprintf(temp, 5, "%d", clientList[i].port);
+                strcat(msg, temp);
+                break;
+            }
+        }
+        break;
+    case '3': //deconectare client
+        strcpy(msg, "3");
+        theFd = atoi(buffer + 2);
+        found = 0;
+        for (i = 0; i<mClient ; i++)
+        {
+            if (clientList[i].fd == theFd)
+            {
+                close(clientList[i].fd);
+                found = 1;
+                break;
+            }
+        }
+        if(found)
+            strcat(msg, ": client disconnected.");
+        else
+            strcat(msg, ": client not found.");
+        break;
+
+    default:
+        //afisare mesaj eroare
+        printf("Command is invalid, it will be ignored..\n");
+        break;
+    }
+    printf("\nMessage for UNIX client: %s", msg);
+    return strlen(msg);
+
+    return 0;
+}
+
+void *unix_main(void *args)
+{
+
+    printf("UNIX server is running\n");
+
+    int serverFd = -1, clientFd = -2;
+    int error, nBytes, numSent;
+    char cmdClient[512]; // comanda de la client
+    char mesaj[512]; // mesaj catre client
+    struct sockaddr_un serverAddr;
+
+    // creeaza socket cu protocolul TCP
+    serverFd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+    if(serverFd < 0)
+    {
+        perror("UNIX socket() error..");
+    }
+
+    memset(&serverAddr, 0, sizeof(serverAddr)); //initialize serverAddr
+    serverAddr.sun_family = AF_UNIX;
+    strcpy(serverAddr.sun_path, UNIX_FILE);
+
+    //cu bind facem legatura dintre serverAddr si socket(serverFd)
+    error = bind(serverFd, (struct sockaddr *) &serverAddr, SUN_LEN(&serverAddr));
+
+    if(error < 0)
+    {
+        perror("UNIX bind() error..");
+    }
+
+    error = listen(serverFd, 10); // convertim socket-ul in modul ascultare, pot sa aibe maximum 10 conexiuni
+
+    if(error < 0)
+    {
+        perror("UNIX listen() error");
+    }
+    int tries = 10;
+    while(tries)
+    {
+        //ascultam cererile de conectare doar daca clientFd < 0
+        if(clientFd < 0)
+        {
+            if((clientFd = accept(serverFd, NULL, NULL)) == -1)  // accept returneaza urmatoarea conexiune existenta
+            {
+                perror("UNIX accept() error\n");
+                break;
+            }
+        }
+        else   //primeste comenzi de la administrator
+        {
+            while((nBytes = read(clientFd, cmdClient, sizeof(cmdClient))) > 0)  // citeste mesajul de la client si il pune in buffer-ul cmd client
+            {
+                cmdClient[nBytes] = 0;
+                printf("UNIX = read %d bytes: %s\n", nBytes, cmdClient);  // buffer-ul cmdClient continte acum mesajul de la admin
+
+                int len = processClientRequest(nBytes, cmdClient, mesaj);
+
+                numSent = send(clientFd, mesaj, len, 0); // trimite mesajul inapoi la client
+                if( numSent < 0)
+                {
+                    perror("UNIX send() error.");
+                    break;
+                }
+            }
+            if(nBytes < 0)
+            {
+                perror("UNIX client read error, the connection will be closed.\n");
+                close(clientFd);
+                clientFd = -2;
+                continue;
+            }
+            else if( nBytes == 0)
+            {
+                printf("UNIX ** The client closed the connection.\n");
+                close(clientFd);
+                clientFd = -2;
+                continue;
+            }
+        }
+        --tries;
+    }
+
+    if(serverFd > 0)
+        close(serverFd);
+
+    unlink(UNIX_FILE); //fisierul de comunicare este inchis
+}
+
 
 ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
 {
@@ -317,25 +486,6 @@ void *inet_main(void *args)
         clientList[i].fd = 0;
     }
 
-    //deschide fisierul de ip-uri blocate pentru a citi si a adauga
-
-    char blockedCPath[255] = "/home/oanap/Documents/clientiBlocati.txt";
-    blockedCFile = fopen(blockedCPath,"a+");
-
-    if(!blockedCFile)
-    {
-        printf("Nu s-a putut deschide fisierul cu clienti blocati.\n");
-    }
-    else
-    {
-        printf("Clientii blocati sunt:\n\n");
-        while(fgets(blockedIpC[totalBlocked], MAX_BLOCKED, blockedCFile))
-        {
-          printf("%s", blockedIpC[totalBlocked]);
-          totalBlocked++;
-        }
-    }
-
 
     FD_ZERO(&readSet); // clear socket set
 
@@ -361,23 +511,10 @@ void *inet_main(void *args)
             //char *inet_ntoa(struct in_addr in);
             //function converts the Internet host address in, given in network byte order, to a string in IPv4 dotted-decimal notation.
             clientIP = inet_ntoa(clientAddr.sin_addr);
+            printf("Conexiune reusita client inet; fd = %d, IP = %s\n", clientFd, clientIP);
 
-            int blocked = 0;
-
-            for(i = 0; i < MAX_CLIENTS; i++)
+            if(1)
             {
-                if(strcmp(clientIP, blockedIpC[i]) == 0)
-                {
-                    //clientul e blocat si se inchide conexiunea
-                    blocked = 1;
-                    close(clientFd);
-                    printf("Clientul a fost respins, este blocat, conexiune inchisa; fd = %d, IP = %s\n", clientFd, clientIP);
-                }
-            }
-
-            if(blocked == 0)
-            {
-                printf("Conexiune reusita client inet; fd = %d, IP = %s\n", clientFd, clientIP);
 
                 //se adauga clientul la lista de clienti
                 for(i = 0; i < MAX_CLIENTS; i++)
@@ -387,49 +524,69 @@ void *inet_main(void *args)
                         clientList[i].fd = clientFd;
                         strcpy(clientList[i].IP, clientIP);
                         clientList[i].port = clientAddr.sin_port;
+                        printf("%d   %s    %d\n", clientList[i].fd, clientList[i].IP, clientList[i].port);
 
+                        if(i >= mClient)
+                        {
+                            mClient = i+1;
+                        }
+
+                        break;
                     }
+
                 }
 
                 if(i == MAX_CLIENTS)
                 {
                     printf("Numarul de clienti a atins limita maxima de %d", MAX_CLIENTS);
+                    exit(1);
                 }
+
+
 
                 //pune noul clientFd in setul de readSet
                 FD_SET(clientFd, &readSet);
 
                 if(clientFd > maxFd)
                     maxFd = clientFd;
-            }
 
+            }
+            if(--fdReady <=0)
+                continue; //se intoarce la select
         }
 
+        //daca client-ul s-a conectat atunci realizam rezervarea
         for(i = 0; i < MAX_CLIENTS; i++)
         {
             if(FD_ISSET(clientList[i].fd, &readSet))
             {
-                myRecvFunction(clientFd);
-                ecuation(clientFd);
+                myRecvFunction(clientList[i].fd);
+                ecuation(clientList[i].fd);
             }
         }
     }
 }
 
 
-    int main()
-    {
-        int inetPort;
+int main()
+{
+    int inetPort;
+    int unixPort;
 
-        pthread_t inetThread;
+    pthread_t inetThread;
+    pthread_t unixThread;
 
-        inetPort = INET_PORT; // portul pt inet
 
-        //int pthread_create(pthread_t *restrict thread, const pthread_attr_t *restrict attr, void *(*start_routine)(void *), void *restrict arg);
+    inetPort = INET_PORT; // portul pt inet
+    unixPort = UNIX_PORT; // portul pt admin
 
-        pthread_create(&inetThread, NULL, inet_main, &inetPort);
+    //int pthread_create(pthread_t *restrict thread, const pthread_attr_t *restrict attr, void *(*start_routine)(void *), void *restrict arg);
 
-        pthread_join(inetThread, NULL);
+    pthread_create(&inetThread, NULL, inet_main, &inetPort);
+    pthread_create(&unixThread, NULL, unix_main, &unixPort);
 
-        return 0;
-    }
+    pthread_join(inetThread, NULL);
+    pthread_join(unixThread, NULL);
+
+    return 0;
+}

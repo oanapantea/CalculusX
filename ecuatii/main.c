@@ -1,25 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+  char userFile[512] = "../Documents/ecuatiiRecv";
 
-int main()
-{
-    char path[255] = "/home/oanap/Documents/";
+  void function1(){
 
-    printf("%s\n", path);
+    char *valueC = (char*) calloc(10, sizeof(char));
 
-    char pathAux[255] = "\0";
+    int val = 2;
 
-    strcpy(pathAux, path);
-    printf("%s\n", pathAux);
+    strcpy(userFile, "../Documents/ecuatiiRecv");
 
-    char userFile[255] = "ecuatiiRecv";
-    char valueC = 2 + "0";
+    snprintf(valueC, 12, "%d", 2);
+
+    printf("%s\n", valueC);
+
     strcat(userFile, valueC);
     printf("%s\n", userFile);
 
     strcat(userFile, ".txt");
     printf("%s\n", userFile);
+
+  }
+int main()
+{
+    function1();
+    printf("\n%s\n", userFile);
 
     return 0;
 }

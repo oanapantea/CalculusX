@@ -13,6 +13,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
 
 #define MAX_MSG 512
 #define MAXCHAR 128
@@ -25,8 +26,55 @@
 
 #define min(m,n) ((m) < (n) ? (m) : (n))
 
-char pathname[255] = "/home/oanap/Documents/ecuatii.txt";
-char filename[255] = "ecuatii.txt";
+char pathname[255] = "/home/oanap/Documents/ecuatiiCl";
+char filename[255] = "ecuatiiCl";
+char pathRasp[255] = "/home/oanap/Documents/ecuatiiRasp";
+
+void clientPath(int fd){
+
+    char *valueC = (char*) calloc(10, sizeof(char));
+
+    strcpy(pathname, "/home/oanap/Documents/ecuatiiCl");
+
+    snprintf(valueC, 12, "%d", fd);
+
+    strcat(pathname, valueC);
+
+    strcat(pathname, ".txt");
+
+  }
+
+void raspPath(int fd){
+
+    char *valueC = (char*) calloc(10, sizeof(char));
+
+    strcpy(pathRasp, "/home/oanap/Documents/ecuatiiRasp");
+
+    snprintf(valueC, 12, "%d", fd);
+
+    printf("%s\n", valueC);
+
+    strcat(pathRasp, valueC);
+
+    strcat(pathRasp, ".txt");
+
+  }
+
+  void clientFile(int fd){
+
+    char *valueC = (char*) calloc(10, sizeof(char));
+
+    strcpy(filename, "ecuatiiCl");
+
+    snprintf(valueC, 12, "%d", fd);
+
+    printf("%s\n", valueC);
+
+    strcat(filename, valueC);
+
+    strcat(filename, ".txt");
+
+  }
 
 ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count)
 {
@@ -85,7 +133,7 @@ void mySendFunction(int socketFd){
 
      //trimit numele fisierului
     send(socketFd, &filename, sizeof(filename), 0);
-    fileFd = open(pathname, O_RDONLY); // if filedd !=0 => error, else => not error
+    fileFd = open(pathname, O_RDONLY);
     fstat(fileFd, &fileStruct);
     fprintf(stderr, "Fisierul %s are marimea = %ld \n", filename, fileStruct.st_size);
 
@@ -108,10 +156,11 @@ void myRecvFunction(int socketFd){
     int fileFd;
     struct stat fileStruct;
     char sentFileName[255];
+    raspPath(socketFd);
 
      //trimit numele fisierului
     recv(socketFd, &sentFileName, sizeof(sentFileName), 0);
-    fileFd = open("/home/oanap/Documents/ecuatii1.txt", O_CREAT|O_WRONLY, 0600);
+    fileFd = open(pathRasp, O_CREAT|O_WRONLY, 0600);
     recv(socketFd, &fileSize, sizeof(fileSize), 0);
     fprintf(stderr, "Fisierul %s are marimea = %ld \n", sentFileName, fileSize);
 
@@ -209,6 +258,8 @@ int main(int argc, char * argv[])
         //procesam optiunea de la client
         switch(optiune){
             case 1:
+                clientFile(clientFd);
+                clientPath(clientFd);
                 fileCl = fopen(pathname, "w");
                 printf("\nAi ales sa trimiti ecuatia spre rezolvare\n");
                 printf("\nCate ecuatii are sistemul? n = ");

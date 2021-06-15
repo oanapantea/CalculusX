@@ -1,5 +1,5 @@
 # depslib dependency file v1.0
-1623446350 source:/home/oanap/Documents/pcdProject/proiect_pcd_Server/main.c
+1623749321 source:/home/oanap/Documents/pcdProject/proiect_pcd_Server/main.c
 	<sys/un.h>
 	<sys/socket.h>
 	<stddef.h>
@@ -18,4 +18,6 @@
 	<netinet/in.h>
 	<arpa/inet.h>
 	<stdio.h>
+	<fcntl.h>
+	<sys/stat.h>
 
